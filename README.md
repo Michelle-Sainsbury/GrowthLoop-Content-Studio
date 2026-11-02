@@ -49,7 +49,7 @@ npm run lint
 npm run build
 ```
 
-`npm test` compiles the existing Content Agent modules into an ignored directory and runs the six original Node tests, four short-film contract tests, and twelve three-minute presentation contract tests. The original checks cover: A/B framing and claim preservation, invalid brief rejection, actual revision changes, unsupported-feedback rejection, the three-cycle cap and explicit human approval.
+`npm test` compiles the existing Content Agent modules into an ignored directory and runs the six original Node tests, four short-film contract tests, and fifteen three-minute presentation contract tests. The original checks cover: A/B framing and claim preservation, invalid brief rejection, actual revision changes, unsupported-feedback rejection, the three-cycle cap and explicit human approval.
 
 ## Connect your own Vercel account later
 
@@ -59,35 +59,37 @@ When you choose to deploy, import **Michelle-Sainsbury/GrowthLoop-Content-Studio
 
 This is a browser-state presentation demo, not a production marketing automation system. Review its preview before connecting it to other systems or approving a production release.
 
-## Watch Demo — three-minute live presentation
+## Watch Demo — one click, three minutes, complete GrantReady story
 
-**Watch Demo** opens the new emerald-and-mint presentation. The original **Watch 78-second film** remains a separate option, with its existing mobile-video profile and export scripts preserved.
+**Watch Demo** runs from the hypothetical GrantReady brief through the final approval outcome with **one click and no further interaction**. The original **Watch 78-second film** remains a separate option, with its existing mobile profile and export scripts preserved.
 
-The new presentation keeps a large animated three-cycle loop beside the working content throughout desktop narration. It uses the **same deterministic generation, revision and approval functions** as the manual application. Word-level comparisons highlight actual added/replaced text between revisions and count removed words without changing the generated copy. The hypothetical claim is retained in both drafts. History contains only the cycles actually generated for the displayed frame.
+The presentation has a prominent animated feedback loop, stage reveals, actual generated A/B copy, highlighted changes across both revisions, and a visibly scripted review/selection/approval sequence. It ends with **Variation B approved in the simulation, Variation A unapproved, and nothing published**.
 
-### Narration pacing
-
-| Active playback time | Story |
+| Active playback | What appears automatically |
 | --- | --- |
-| 0:00–0:30 | Opening, purpose and hypothetical GrantReady campaign brief |
-| 0:30–0:56 | Cycle 1: actual LinkedIn-style A/B drafts |
-| 0:56–1:10 | Simulated reviewer feedback: “Make it shorter” |
-| 1:10–1:36 | Cycle 2: concise revisions with differences highlighted |
-| 1:36–1:50 | Simulated reviewer feedback: “More detailed. Ask a question.” |
-| 1:50–2:20 | Cycle 3: final revisions and closing questions |
-| 2:20–2:36 | Actual three-entry revision history |
-| 2:36–2:54 | Human approval gate; explicit simulated selection and review |
-| 2:54–3:00 | Selected variation, loop stopped, nothing published |
+| 0:00–0:10 | GrantReady: a hypothetical nonprofit campaign, not an operating product |
+| 0:10–0:24 | Audience, campaign goal, key message and reviewer-supplied hypothetical claim |
+| 0:24–0:56 | Cycle 1: original A/B drafts from the actual generator |
+| 0:56–1:08 | Scripted reviewer feedback: “Make it shorter” |
+| 1:08–1:36 | Cycle 2: actual concise revisions, with changes highlighted |
+| 1:36–1:48 | Scripted reviewer feedback: “More detailed. Ask a question.” |
+| 1:48–2:20 | Cycle 3: actual final revisions and closing questions |
+| 2:20–2:30 | Actual three-entry browser-state history |
+| 2:30–2:35 | Scripted reviewer considers the final A/B pair |
+| 2:35–2:41 | Variation B is visibly selected; A remains unselected |
+| 2:41–2:47 | Scripted review confirmation appears; approval has not yet occurred |
+| 2:47–2:54 | The unchanged approval function returns B's simulated approval |
+| 2:54–3:00 | Success finale: B approved, A unapproved, loop stopped, nothing published |
 
-Playback automatically pauses on reaching the human gate. Select A **or** B, check the review confirmation, then click **Confirm simulated approval**. Changing the selected variation resets review confirmation. The real approval function validates the simulation, the other variation remains unapproved, and the timeline resumes. There is no fourth cycle. This deliberately does not record approval of Michelle's actual campaign drafts.
+**There is no interactive gate or approval button in Watch Demo.** The presentation is explicitly labeled a **scripted simulation of a human reviewer**. The script supplies its simulated review flag only after the visible confirmation phase. It does not bypass or change `approvePost`, approve Michelle's real campaign content, or alter the original manual approval controls.
 
-**Play/Pause**, **Replay** and **Next Stage** remain visible during narration. Next Stage moves to the next chapter and pauses; it cannot bypass the unconfirmed approval gate. Replay starts a fresh isolated simulation. Escape or Exit restores the untouched manual campaign and keyboard focus. Backgrounding the tab pauses the presentation; returning does not silently advance it. The scheduled running time is 180 seconds; presenter pauses and review time extend wall-clock duration.
+Wide screens show both complete posts together. Narrow/short screens automatically spotlight A and then B, with two reading panels per post. Every paragraph is shown unchanged and in order; joining the panels reconstructs the exact original post. This is automatic pagination, not truncated replacement copy, an ellipsis, a scroll container or a smaller font. Draft text remains at least 15 px in tested layouts. The loop, current stage and playback controls stay visible.
 
-The layout fits the loop, drafts and controls together on tested desktop/laptop sizes. Tablet/mobile content scrolls within the presentation while controls remain visible; full draft text is retained rather than truncated. Keyboard focus is contained within the dialog. Reduced-motion preferences disable decorative motion without removing stages or controls.
+Play/Pause and Replay are optional safety controls. Next is also available on larger screens for practice. No control needs to be touched after Watch Demo. Backgrounding the tab pauses playback safely; keep the presentation tab visible while narrating. Escape or Exit restores the untouched manual campaign and keyboard focus. Reduced-motion preferences remove decorative motion without stopping the story or scripted finale.
 
-This is simulated demonstration data and simulated reviewer activity, using real local Content functions. It is **not** live model generation, an independently authenticated claim registry, LinkedIn publishing, measured campaign performance, durable server memory, or integration with Shawn's Analytics Agent. State stays in the browser and is cleared on refresh. Nothing is sent to a paid service.
+This is deterministic TypeScript using the same original Content functions, not live model generation, independently authenticated claims, real performance metrics, Analytics integration, database persistence or LinkedIn publishing. Browser state clears on refresh. No paid service or API is used.
 
-These changes remain on `feature/content-studio-watch-demo`, without a commit, push or deployment. The public deployed app does not include this local work yet. Local checks do not establish Safari verification: Chromium is available, but this environment's WebKit download returned HTTP 403 “Domain forbidden.” A Safari walkthrough remains necessary before claiming Safari compatibility is verified.
+The prior deployed version is recoverable at commit `e0affb7cb15758f67e6b326e1afebe792c3cb6d6`. The corrections remain local until Michelle authorizes commit/push/deployment. No direct Safari verification is implied by Chromium tests. A real Safari review of a new preview is still required before final presentation sign-off.
 
 ### Automatic MP4 capture
 
@@ -111,11 +113,13 @@ npm run dev -- --port 3100
 npm run test:browser
 ```
 
-The ten browser scenarios cover the preserved short film and the new three-minute presentation: complete actual cycles, paused/stepped narration, exactly-one simulated approval, replay and manual-state restoration, original manual validation/revision/approval, desktop/laptop/tablet/mobile layouts, reduced motion, keyboard focus containment and background-tab pause. Browser tests advance a virtual clock for speed; the video capture uses real time. Run npm test, npm run typecheck, npm run lint and npm run build as the other checks.
+The browser suite preserves all five original film/manual scenarios and tests one-click autoplay at desktop, laptop, tablet, mobile and split-screen viewport sizes. It verifies every reading panel against actual generated text, all approval-script phases, no additional clicks or scrolling, unclipped essential text, optional controls, reduced motion, keyboard focus, background pause and separation from the real manual campaign. Browser tests advance a virtual clock for speed; the video capture uses real time. Run npm test, npm run typecheck, npm run lint and npm run build as the other checks.
 
 
 ### Current local verification
 
-- `npm test`: 22 passed (6 original, 4 short-film and 12 presentation contracts).
-- Browser checks use local production output and virtual time; capture scripts use actual wall-clock playback. No real drafts are approved by automated checks.
+- `npm test`: 25 passed (6 original, 4 short-film and 15 presentation contracts).
+- `npm run test:browser`: 16 passed, including seven one-click viewport runs with zero scrolling and every A/B reading panel verified.
+- A separate real-time production-browser run completed with one click in 181.76 seconds including launch, ending with simulated B approval, A unapproved and nothing published.
+- Browser regression checks use virtual time; the separate real-time run and capture scripts use actual wall-clock playback. No real drafts are approved by automated checks.
 - The three-minute presentation is intended for live narration. No new three-minute MP4 has been generated; the existing 78-second MP4s and their capture path are preserved.

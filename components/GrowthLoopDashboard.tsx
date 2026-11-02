@@ -86,7 +86,7 @@ export default function GrowthLoopDashboard() {
         <section className="studio-intro">
           <div><p className="studio-eyebrow">CREATE WITH INTENTION. REFINE TOGETHER.</p>
             <h1><span className="studio-sr-only">GrowthLoop AI | </span>Content <em>Studio</em><span className="studio-title-dot">.</span></h1>
-            <p className="studio-subtitle">Human-guided content creation, revision, and approval.</p><div className="studio-demo-launch"><button className="studio-button studio-button-primary" onClick={() => setShowDemo("presentation")}><span aria-hidden="true">▶</span> Watch Demo <span className="studio-demo-duration">3-minute presentation</span></button><span>Three cycles · Presenter controls · Explicit simulated approval</span><button className="studio-film-link" onClick={() => setShowDemo("film")}>Watch 78-second film</button></div>
+            <p className="studio-subtitle">Human-guided content creation, revision, and approval.</p><div className="studio-demo-launch"><button className="studio-button studio-button-primary" onClick={() => setShowDemo("presentation")}><span aria-hidden="true">▶</span> Watch Demo <span className="studio-demo-duration">3-minute presentation</span></button><span>Three cycles · One-click playback · Scripted reviewer</span><button className="studio-film-link" onClick={() => setShowDemo("film")}>Watch 78-second film</button></div>
           </div>
           <div className="studio-intro-note"><LoopMark /><p>Good content is a conversation.<br /><strong>You keep it moving.</strong></p></div>
         </section>

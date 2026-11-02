@@ -2,53 +2,38 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { DEMO_BRIEF, DEMO_FEEDBACK } from "../lib/content-agent/demo";
-import { approvePresentation, createPresentationFrame, diffDraft, nextPresentationTime, PRESENTATION_DURATION, PRESENTATION_STAGES, presentationStageAt } from "../lib/content-agent/presentation";
-import type { ApprovedPost } from "../lib/content-agent/approve-posts";
+import { createPresentationFrame, diffDraft, draftPages, draftSpotlightAt, nextPresentationTime, PRESENTATION_DURATION, PRESENTATION_STAGES, presentationStageAt, scriptedReviewAt } from "../lib/content-agent/presentation";
 import "./studio-presentation.css";
 
 const clock = (seconds: number) => `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, "0")}`;
 
 export default function StudioPresentation({ onClose }: { onClose: () => void }) {
-  const [elapsed, setElapsed] = useState(0);
-  const [playing, setPlaying] = useState(true);
-  const [selection, setSelection] = useState<"A" | "B" | null>(null);
-  const [reviewed, setReviewed] = useState(false);
-  const [approval, setApproval] = useState<ApprovedPost | null>(null);
-  const [error, setError] = useState("");
-  const elapsedRef = useRef(0), approvalLock = useRef(false);
-  const dialog = useRef<HTMLDivElement>(null);
-  const workspace = useRef<HTMLDivElement>(null);
+  const [elapsed, setElapsed] = useState(0), [playing, setPlaying] = useState(true);
+  const elapsedRef = useRef(0), dialog = useRef<HTMLDivElement>(null);
   const stageIndex = presentationStageAt(elapsed), stage = PRESENTATION_STAGES[stageIndex];
   const loop = useMemo(() => createPresentationFrame(stageIndex), [stageIndex]);
-  const posts = loop?.history.at(-1)?.posts ?? [];
-  const previous = loop?.history.at(-2)?.posts;
-  const gate = stageIndex === 8 && !approval;
-  const done = elapsed >= PRESENTATION_DURATION;
+  const scriptTime = elapsed >= 167 ? 167 : elapsed >= 161 ? 161 : elapsed >= 155 ? 155 : 0;
+  const review = useMemo(() => scriptedReviewAt(scriptTime), [scriptTime]);
+  const cycle = loop?.currentCycle ?? 0, done = elapsed >= PRESENTATION_DURATION;
   const feedback = stageIndex === 3 ? DEMO_FEEDBACK[0] : stageIndex === 5 ? DEMO_FEEDBACK[1] : null;
-  const cycle = loop?.currentCycle ?? 0;
-  const appliedFeedback = stageIndex === 4 ? DEMO_FEEDBACK[0] : stageIndex === 6 ? DEMO_FEEDBACK[1] : null;
-
-  useEffect(() => { if (workspace.current) workspace.current.scrollTop = 0; }, [stageIndex]);
+  const applied = stageIndex === 4 ? DEMO_FEEDBACK[0] : stageIndex === 6 ? DEMO_FEEDBACK[1] : null;
+  const draftStage = [2, 4, 6].includes(stageIndex);
+  const posts = loop?.history.at(-1)?.posts ?? [], previous = loop?.history.at(-2)?.posts;
+  const spotlight = draftStage ? draftSpotlightAt(elapsed, stageIndex) : null;
 
   function seek(seconds: number) { elapsedRef.current = seconds; setElapsed(seconds); }
-  function replay() {
-    approvalLock.current = false; setApproval(null); setSelection(null); setReviewed(false); setError(""); seek(0); setPlaying(true);
-  }
-  function next() {
-    if (gate || done) return;
-    seek(PRESENTATION_STAGES[Math.min(stageIndex + 1, 9)].at); setPlaying(false);
-  }
+  function replay() { seek(0); setPlaying(true); }
+  function next() { if (!done) seek(PRESENTATION_STAGES[Math.min(stageIndex + 1, 9)].at); }
   useEffect(() => {
-    if (!playing || done || gate) return;
+    if (!playing || done) return;
     let last = performance.now();
     const timer = window.setInterval(() => {
-      const now = performance.now();
-      const value = nextPresentationTime(elapsedRef.current, (now - last) / 1000, Boolean(approval));
+      const now = performance.now(), value = nextPresentationTime(elapsedRef.current, (now - last) / 1000);
       last = now; elapsedRef.current = value; setElapsed(value);
-      if (value === 156 && !approval || value === PRESENTATION_DURATION) setPlaying(false);
+      if (value === PRESENTATION_DURATION) setPlaying(false);
     }, 100);
     return () => window.clearInterval(timer);
-  }, [playing, done, gate, approval]);
+  }, [playing, done]);
   useEffect(() => {
     const focus = document.activeElement as HTMLElement | null, overflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -60,61 +45,66 @@ export default function StudioPresentation({ onClose }: { onClose: () => void })
     document.addEventListener("visibilitychange", pauseWhenHidden);
     return () => document.removeEventListener("visibilitychange", pauseWhenHidden);
   }, []);
-  function confirm() {
-    if (!selection || !reviewed || approvalLock.current) return;
-    approvalLock.current = true;
-    try { setApproval(approvePresentation(selection, reviewed, approval)); setError(""); setPlaying(true); }
-    catch (e) { approvalLock.current = false; setError(e instanceof Error ? e.message : "Simulated approval failed."); }
-  }
   function keyboard(event: React.KeyboardEvent) {
     if (event.key === "Escape") { onClose(); return; }
     if (event.key !== "Tab") return;
-    const controls = Array.from(dialog.current?.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), [tabindex="0"]') ?? []).filter(el => el.getClientRects().length > 0);
-    const first = controls[0], last = controls.at(-1);
-    if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
-    else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+    const buttons = Array.from(dialog.current?.querySelectorAll<HTMLButtonElement>("button:not(:disabled)") ?? []).filter(button => button.getClientRects().length > 0);
+    if (event.shiftKey && document.activeElement === buttons[0]) { event.preventDefault(); buttons.at(-1)?.focus(); }
+    else if (!event.shiftKey && document.activeElement === buttons.at(-1)) { event.preventDefault(); buttons[0]?.focus(); }
   }
 
-  return <div className="studio present-theater" role="dialog" aria-modal="true" aria-labelledby="presentation-title" onKeyDown={keyboard} ref={dialog} data-presentation-stage={stage.scene} data-playing={playing && !gate && !done}>
+  return <div className="studio present-theater" role="dialog" aria-modal="true" aria-labelledby="presentation-title" onKeyDown={keyboard} ref={dialog} data-presentation-stage={stage.scene} data-playing={playing && !done} data-review-phase={review.phase} data-approved-variation={review.approval?.id ?? "none"} data-published="false">
+    <div className="present-ambient" aria-hidden="true"><span /><span /><span /></div>
     <div className="present-shell">
-      <header className="present-header"><div className="present-brand"><span aria-hidden="true"><PresentationMark /></span><div>GrowthLoop <b>AI</b><small>CONTENT STUDIO / MICHELLE SAINSBURY</small></div></div><span className="present-disclosure">SIMULATED CAMPAIGN & REVIEWER · ACTUAL CONTENT LOGIC</span><button className="present-exit" onClick={onClose} aria-label="Exit presentation and return to campaign">Exit <PresenterIcon name="exit" /></button></header>
-      <div className="present-title" key={`title-${stageIndex}`}><p>{stage.label}</p><h1 id="presentation-title">{stage.title}</h1></div>
-      <div className="present-workspace" ref={workspace}>
-        <aside className="present-loop-panel" aria-label="Three-cycle feedback loop">
-          <div className="present-panel-kicker"><span className="present-live-dot" /> HUMAN-GUIDED REFINEMENT <span>{String(stageIndex + 1).padStart(2, "0")} / 10</span></div>
-          <LoopGraphic cycle={cycle} feedback={Boolean(feedback)} approved={Boolean(approval)} />
-          <div className={`present-feedback-signal ${feedback ? "is-entering" : ""}`} key={`signal-${stageIndex}`}><span>{feedback ? "SIMULATED REVIEWER → NEXT CYCLE" : approval ? "APPROVAL ENDS THE LOOP" : appliedFeedback ? "FEEDBACK APPLIED TO BOTH DRAFTS" : "THE HUMAN STAYS IN CONTROL"}</span><p>{feedback || appliedFeedback ? `“${feedback || appliedFeedback}”` : approval ? `Variation ${approval.id} selected. Other variation not approved.` : cycle === 3 ? "Three cycles reached. A human must now decide." : "Review → Give direction → Revise"}</p></div>
-          <ol className="present-cycle-ledger" aria-label="Completed revision cycles">{[1, 2, 3].map(n => <li key={n} className={n === cycle ? "is-current" : n < cycle ? "is-complete" : ""}><span>{n < cycle ? "✓" : `0${n}`}</span><div><strong>Cycle {n}</strong><small>{n === 1 ? "Generate two perspectives" : n === 2 ? "Make both posts shorter" : "Add detail and a question"}</small></div><b>{n <= cycle ? n === cycle ? "Current" : "Complete" : "Not started"}</b></li>)}</ol>
-          <p className="present-boundary">No Analytics Agent. No performance metrics.<br />No LinkedIn publishing. Your judgment leads.</p>
+      <header className="present-header"><div className="present-brand"><Mark /><span>GrowthLoop <b>AI</b><small>CONTENT STUDIO / MICHELLE SAINSBURY</small></span></div><span className="present-disclosure">SCRIPTED REVIEWER SIMULATION · ACTUAL CONTENT FUNCTIONS</span><button className="present-exit" onClick={onClose} aria-label="Exit presentation and return to campaign">Exit <Icon name="exit" /></button></header>
+      <div className="present-title" key={stageIndex}><div><p>{stage.label}</p><h1 id="presentation-title">{stage.title}</h1></div><span className="present-chapter">{String(stageIndex + 1).padStart(2, "0")}<small>/ 10</small></span></div>
+      <div className="present-workspace">
+        <aside className={`present-loop-panel ${review.approval ? "is-approved" : ""}`} aria-label="Three-cycle feedback loop">
+          <div className="present-panel-kicker"><span /> THE HUMAN-GUIDED CONTENT LOOP</div>
+          <Orbit cycle={cycle} feedback={Boolean(feedback)} approved={Boolean(review.approval)} />
+          <div className={`present-feedback-signal ${feedback ? "is-entering" : ""}`} key={stageIndex}><span>{review.approval ? "SCRIPTED APPROVAL · LOOP STOPPED" : feedback ? "SCRIPTED REVIEWER → CONTENT AGENT" : applied ? "FEEDBACK APPLIED TO BOTH DRAFTS" : cycle === 3 ? "THREE CYCLES REACHED" : "HYPOTHETICAL GRANTREADY CAMPAIGN"}</span><p>{review.approval ? "B approved. A remains unapproved." : feedback || applied ? `“${feedback || applied}”` : cycle === 3 ? "Review → Select B → Confirm" : "A clear brief. Two distinct perspectives."}</p></div>
+          <div className="present-loop-boundary">3 cycles maximum · Nothing automatically published</div>
         </aside>
-        <section className={`present-content present-content-${stage.scene}`} aria-label="Presentation content" key={stage.scene}>
-          {stageIndex === 0 ? <div className="present-welcome"><span className="present-overline">THE CONTENT AGENT, IN MOTION</span><h2>Clarity.<br /><em>Refinement.</em><br />Human judgment.</h2><p>One campaign brief. Two real draft variations.<br />Three cycles you can see.</p><div className="present-feature-pills"><span>3-minute guided story</span><span>Pause at any moment</span></div><p className="present-small">Hypothetical GrantReady content · Deterministic TypeScript templates · No model API</p></div>
-          : stageIndex === 1 ? <div className="present-brief"><span className="present-overline">THE BRIEF / HYPOTHETICAL GRANTREADY</span><h2>Start with intention.</h2><dl>{[["Who we’re speaking to", DEMO_BRIEF.audience], ["What we want to encourage", DEMO_BRIEF.campaignGoal], ["The message", DEMO_BRIEF.keyMessage], ["Reviewer-supplied demo claim", DEMO_BRIEF.approvedClaims[0]]].map(([label, text]) => <div key={label}><dt>{label}</dt><dd>{text}</dd></div>)}</dl><p className="present-small">A hypothetical concept, not a functioning grant-finding product. This claim input is not independent fact verification.</p></div>
-          : feedback ? <div className="present-review"><span className="present-overline">HUMAN DIRECTION, CLEARLY LABELED AS SIMULATED</span><div className="present-review-symbol" aria-hidden="true">↺</div><h2>“{feedback}”</h2><p>Both variations will change.<br />The supplied claim will stay intact.</p><div className="present-feedback-flow" aria-hidden="true"><span>Reviewer</span><i>→</i><span>Content Agent</span><i>→</i><span>Next cycle</span></div><small>The next stage applies this feedback through the actual revision function.</small></div>
-          : stageIndex === 7 ? <div className="present-history"><span className="present-overline">ACTUAL HISTORY / THIS DEMONSTRATION’S BROWSER STATE</span><h2>See the thinking evolve.</h2><ol>{loop?.history.map(entry => <li key={entry.cycle}><span>0{entry.cycle}</span><div><h3>{entry.cycle === 1 ? "A starting perspective" : entry.cycle === 2 ? "A more concise message" : "Context and a question"}</h3><p>{entry.feedback}</p><small>{entry.posts.length} actual drafts · Cycle {entry.cycle} of 3</small></div><b aria-hidden="true">✓</b></li>)}</ol><div className="present-history-stop">3 / 3 cycles reached. Revision stops here. Approval is a separate decision.</div></div>
-          : stageIndex === 8 ? <div className="present-gate"><span className="present-overline">HUMAN APPROVAL GATE / SIMULATED REVIEW</span><h2>{approval ? `Variation ${approval.id} approved.` : "One selection. One explicit decision."}</h2><p>{approval ? `Variation ${approval.id === "A" ? "B" : "A"} is not approved. The loop is closed. Nothing has been published.` : "Review the final drafts, select one variation, and confirm review before simulating approval."}</p><fieldset disabled={Boolean(approval)}><legend>Select exactly one final variation</legend><div className="present-gate-options">{posts.map(post => <label key={post.id} className={selection === post.id ? "is-selected" : ""}><input type="radio" name="present-variation" value={post.id} checked={selection === post.id} onChange={() => { setSelection(post.id); setReviewed(false); }} /><strong>Variation {post.id} · {post.id === "A" ? "Human-centered" : "Action-oriented"}</strong><span>{post.content}</span></label>)}</div></fieldset><label className="present-review-confirm"><input type="checkbox" disabled={Boolean(approval)} checked={reviewed} onChange={e => setReviewed(e.target.checked)} />I have reviewed these simulated drafts and confirm my selected variation.</label><button className="present-confirm" disabled={!selection || !reviewed || Boolean(approval)} onClick={confirm}>{approval ? `✓ Variation ${approval.id} approved in this simulation` : "Confirm simulated approval"}</button>{error && <p role="alert">{error}</p>}<p className="present-small" role="status">{approval ? "Exactly one simulated approval recorded. No fourth cycle. No automatic publishing." : "Playback is paused at the human gate. This action affects this demonstration only."}</p></div>
-          : stageIndex === 9 ? <div className="present-ending"><span className="present-ending-seal" aria-hidden="true">✓</span><span className="present-overline">THE HUMAN HAS THE FINAL WORD</span><h2>Variation {approval?.id} approved.<br /><em>The loop is complete.</em></h2><p>Three cycles. Two directions.<br />One explicitly simulated human decision.</p><div className="present-feature-pills"><span>Loop stopped</span><span>Other variation not approved</span><span>Nothing published</span></div><p className="present-small">Michelle Sainsbury · GrowthLoop AI Content Studio<br />Standalone demonstration. Not proof of shared two-agent integration.</p></div>
-          : <div className="present-drafts"><div className="present-drafts-heading"><span>ACTUAL GENERATED DRAFTS · CYCLE {cycle} / 3</span>{previous && <span className="present-change-key">▰ Added / replaced text</span>}</div><div className="present-post-grid">{posts.map((post, i) => {
-            const changes = previous ? diffDraft(previous[i].content, post.content) : null;
-            return <article className="present-post" key={post.id}><div className="present-post-label"><span>{post.id}</span><h2>{post.id === "A" ? "Human-centered" : "Action-oriented"}</h2><small>Draft</small></div><div className="present-paper"><div className="present-author"><span aria-hidden="true"><PresentationMark /></span><div><strong>GrowthLoop AI</strong><small>Hypothetical campaign · Not published</small></div><b aria-hidden="true">in</b></div><p className="present-post-copy">{changes ? changes.tokens.map((token, index) => token.added ? <mark key={index}>{token.text}</mark> : token.text) : post.content}</p><div className="present-social" aria-hidden="true">♡ Like <span>◇ Comment</span><span>↗ Share</span></div></div><footer>{changes ? `${changes.added} words added · ${changes.removed} words removed · Claim preserved` : "Two framings · Same supplied claim · Human review required"}</footer></article>;
-          })}</div></div>}
+        <section className={`present-content present-content-${stage.scene}`} key={stage.scene} aria-label="Presentation content">
+          <span className="present-scene-watermark" aria-hidden="true">{cycle ? `0${cycle}` : "GR"}</span>
+          {stageIndex === 0 ? <div className="present-welcome" data-essential="opening"><span className="present-overline">HYPOTHETICAL NONPROFIT CAMPAIGN</span><h2>GrantReady<span>.</span><br /><em>From a brief<br />to better drafts.</em></h2><p>A conversation about grant readiness.<br />Created with code. Refined by human direction.</p><div className="present-story-pills"><span>2 perspectives</span><span>3 actual cycles</span><span>1 scripted decision</span></div><p className="present-small">A demonstration concept, not a functioning grant-finding product.</p></div>
+          : stageIndex === 1 ? <div className="present-brief" data-essential="brief"><span className="present-overline">THE GRANTREADY BRIEF</span><h2>Purpose before prose.</h2><dl>{[["Audience", DEMO_BRIEF.audience], ["Campaign goal", DEMO_BRIEF.campaignGoal], ["Key message", DEMO_BRIEF.keyMessage], ["Reviewer-supplied demo claim", DEMO_BRIEF.approvedClaims[0]]].map(([label, text]) => <div key={label}><dt>{label}</dt><dd>{text}</dd></div>)}</dl><p className="present-small">Hypothetical inputs. No independent product-evidence or fact-verification claim.</p></div>
+          : feedback ? <div className="present-review" data-essential="feedback"><span className="present-overline">SCRIPTED SIMULATION OF A HUMAN REVIEWER</span><div className="present-review-orb" aria-hidden="true"><Icon name="replay" /></div><h2>“{feedback}”</h2><p>Change the expression.<br /><strong>Keep the supplied claim.</strong></p><div className="present-feedback-flow"><span>Review</span><i aria-hidden="true">→</i><span>Direction</span><i aria-hidden="true">→</i><span>Revision</span></div></div>
+          : stageIndex === 7 ? <div className="present-history" data-essential="history"><span className="present-overline">ACTUAL BROWSER-STATE REVISION HISTORY</span><h2>A visible trail of refinement.</h2><ol>{loop?.history.map(entry => <li key={entry.cycle}><span>0{entry.cycle}</span><div><h3>{entry.cycle === 1 ? "Generate" : entry.cycle === 2 ? "Make it shorter" : "Add detail. Ask a question."}</h3><p>{entry.feedback}</p></div><b>2 drafts</b></li>)}</ol><div className="present-history-stop">3 / 3 cycles. No fourth revision.<br /><strong>Approval is a separate, explicit step.</strong></div></div>
+          : stageIndex === 8 ? <div className="present-gate" data-essential="approval"><span className="present-overline">SCRIPTED SIMULATION · NOT A LIVE HUMAN APPROVAL</span><h2>{review.phase === "review" ? "Review the final A/B pair." : review.phase === "select" ? "The scripted reviewer selects B." : review.phase === "confirm" ? "Simulated review confirmed." : "Variation B alone is approved."}</h2><div className="present-gate-options">{posts.map(post => <div key={post.id} className={`present-choice ${review.selectedId === post.id ? "is-selected" : ""} ${review.approval?.id === post.id ? "is-approved" : ""}`} data-variation={post.id} data-status={review.approval?.id === post.id ? "approved" : "unapproved"}><span className="present-choice-letter">{post.id}</span><div><h3>Variation {post.id}</h3><p>{post.id === "A" ? "Human-centered" : "Action-oriented"}</p></div><span className="present-choice-radio" aria-label={review.selectedId === post.id ? `Variation ${post.id} selected by scripted reviewer` : `Variation ${post.id} not selected`}>{review.selectedId === post.id ? "✓" : ""}</span><blockquote>{post.content.split("\n\n").at(-1)}</blockquote><strong>{review.approval?.id === post.id ? "APPROVED · SIMULATION" : post.id === "B" && review.selectedId === "B" ? "SELECTED · NOT YET APPROVED" : "NOT APPROVED"}</strong></div>)}</div><div className={`present-script-confirm ${review.reviewed ? "is-confirmed" : ""}`}><span aria-hidden="true">{review.reviewed ? "✓" : "□"}</span><div><strong>{review.reviewed ? "Scripted reviewer confirmed review of B" : "Scripted reviewer confirmation pending"}</strong><small>The real manual workflow still requires an explicit human approval.</small></div></div><p className="present-gate-result" role="status">{review.approval ? "B APPROVED · A UNAPPROVED · NOTHING PUBLISHED" : "The presentation advances automatically. No input needed."}</p></div>
+          : stageIndex === 9 ? <div className="present-ending" data-essential="ending"><div className="present-success-seal" aria-hidden="true"><span>B</span><b>✓</b></div><span className="present-overline">GRANTREADY · SCRIPTED DEMONSTRATION COMPLETE</span><h2>Variation B approved.<br /><em>Nothing was published.</em></h2><div className="present-final-decisions"><span data-final-variation="A">A · Not approved</span><strong data-final-variation="B">B · Approved in simulation</strong></div><p>Three cycles. Two feedback directions.<br />One clearly simulated reviewer decision.</p><p className="present-small">Loop stopped · No Analytics Agent · No LinkedIn publishing</p></div>
+          : <div className="present-drafts"><div className="present-drafts-heading"><span>ACTUAL COPY · CYCLE {cycle} OF 3</span><span>{previous ? "Mint = added / replaced language" : "Both drafts keep the supplied claim"}</span></div><div className="present-post-grid present-dual">{posts.map((post, i) => <Draft key={post.id} id={post.id} content={post.content} previous={previous?.[i].content} />)}</div><div className="present-spotlight">{spotlight && (() => {
+            const post = posts.find(p => p.id === spotlight.id)!;
+            return <><div className="present-reading-strip" data-essential="reading-progress"><span className={spotlight.id === "A" ? "is-active" : ""}>A · Human-centered</span><span className={spotlight.id === "B" ? "is-active" : ""}>B · Action-oriented</span><b>Panel {spotlight.page + 1} / 2</b></div><Draft key={`${cycle}-${spotlight.id}-${spotlight.page}`} id={post.id} content={post.content} previous={previous?.find(p => p.id === post.id)?.content} page={spotlight.page} /><p className="present-auto-reading">Full copy appears in automatic reading panels · No scrolling or clicks needed</p></>;
+          })()}</div></div>}
         </section>
       </div>
-      <footer className="present-footer"><div className="present-narration" aria-live="polite" aria-atomic="true"><span>{gate ? "YOUR DECISION · PLAYBACK PAUSED" : "NARRATION CUE"}</span><p>{stage.note}</p></div><div className="present-controls"><button onClick={() => { if (done) replay(); else setPlaying(!playing); }} disabled={gate} aria-label={done ? "Play presentation again" : playing ? "Pause presentation" : "Play presentation"}><PresenterIcon name={playing && !gate && !done ? "pause" : "play"} />{playing && !gate && !done ? "Pause" : "Play"}</button><button onClick={replay} aria-label="Replay presentation"><PresenterIcon name="replay" />Replay</button><button onClick={next} disabled={gate || done} aria-label="Next presentation stage">Next Stage<PresenterIcon name="next" /></button><span className="present-stage-count">Stage {stageIndex + 1} of 10</span><div className="present-progress" role="progressbar" aria-label="Presentation progress" aria-valuemin={0} aria-valuemax={PRESENTATION_DURATION} aria-valuenow={Math.floor(elapsed)}><span style={{ width: `${elapsed / PRESENTATION_DURATION * 100}%` }} /></div><time>{clock(elapsed)} / 3:00</time></div></footer>
+      <footer className="present-footer"><div className="present-narration" aria-live="polite" aria-atomic="true"><span>{review.approval ? "SCRIPTED APPROVAL COMPLETE" : "THE STORY, AS IT HAPPENS"}</span><p>{stage.note}</p></div><div className="present-controls"><button onClick={() => { if (done) replay(); else setPlaying(!playing); }} aria-label={done ? "Play presentation again" : playing ? "Pause presentation" : "Play presentation"}><Icon name={playing && !done ? "pause" : "play"} />{playing && !done ? "Pause" : "Play"}</button><button onClick={replay} aria-label="Replay presentation"><Icon name="replay" />Replay</button><button className="present-next" onClick={next} disabled={done} aria-label="Next presentation stage">Next<Icon name="next" /></button><div className="present-progress" role="progressbar" aria-label="Presentation progress" aria-valuemin={0} aria-valuemax={PRESENTATION_DURATION} aria-valuenow={Math.floor(elapsed)}><span style={{ width: `${elapsed / PRESENTATION_DURATION * 100}%` }} /></div><time>{clock(elapsed)} / 3:00</time></div></footer>
     </div>
   </div>;
 }
 
-function LoopGraphic({ cycle, feedback, approved }: { cycle: number; feedback: boolean; approved: boolean }) {
-  return <div className={`present-loop ${feedback ? "is-receiving" : ""} ${approved ? "is-approved" : ""}`} role="img" aria-label={`Three-cycle loop: ${cycle ? `cycle ${cycle} of 3` : "awaiting campaign brief"}. ${approved ? "Approval ends the loop." : feedback ? "Human feedback entering the next revision." : "Human-guided revision."}`}>
-    <svg viewBox="60 15 300 280" aria-hidden="true"><defs><linearGradient id="present-loop-gradient" x1="0" y1="0" x2="1" y2="1"><stop stopColor="#d1ffe2" /><stop offset="1" stopColor="#4eaa88" /></linearGradient><marker id="present-arrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="m1 1 5 3-5 3" fill="none" stroke="#a2dfbc" strokeWidth="1.6" /></marker></defs><circle cx="210" cy="148" r="113" className="present-orbit-halo" /><path d="M140 72 Q210 26 280 72 M326 137 Q330 221 255 244 M164 244 Q82 220 94 137" className="present-orbit-track" markerEnd="url(#present-arrow)" /><path d="M140 72 Q210 26 280 72 M326 137 Q330 221 255 244 M164 244 Q82 220 94 137" className="present-orbit-motion" /><text x="210" y="134" textAnchor="middle" className="present-loop-center">{approved ? "APPROVED" : feedback ? "HUMAN INPUT" : "CONTENT LOOP"}</text><text x="210" y="167" textAnchor="middle" className="present-loop-cycle">{approved ? "✓" : cycle ? `0${cycle} / 03` : "01 → 03"}</text><text x="210" y="190" textAnchor="middle" className="present-loop-sub">{approved ? "No further revisions" : "Improve with Feedback"}</text>{[{x:106,y:98,n:1},{x:314,y:98,n:2},{x:210,y:251,n:3}].map(({x,y,n}) => <g key={n} className={`present-orbit-node ${cycle === n ? "is-active" : n < cycle ? "is-complete" : ""}`}><circle cx={x} cy={y} r="32" /><text x={x} y={y+7} textAnchor="middle">{n < cycle ? "✓" : `0${n}`}</text></g>)}</svg>
-    <span className="present-loop-caption">{approved ? "ONE DECISION. LOOP CLOSED." : "GENERATE → REVIEW → REFINE"}</span>
-  </div>;
+function Draft({ id, content, previous, page }: { id: "A" | "B"; content: string; previous?: string; page?: number }) {
+  const difference = previous ? diffDraft(previous, content) : null;
+  const tokens = difference?.tokens ?? [{ text: content, added: false }];
+  const pages = draftPages(content), start = page === 1 ? pages[0].length + 2 : 0, end = page === undefined ? content.length : start + pages[page].length;
+  let offset = 0;
+  const visible: React.ReactNode[] = [];
+  for (const [index, token] of tokens.entries()) {
+    const begin = offset; offset += token.text.length;
+    const text = token.text.slice(Math.max(0, start - begin), Math.min(token.text.length, end - begin));
+    if (offset <= start || begin >= end || !text) continue;
+    visible.push(token.added ? <mark key={index}>{text}</mark> : text);
+  }
+  return <article className="present-post" data-essential="draft" data-draft-id={id} data-draft-page={page ?? "full"}><header><span>{id}</span><div><h2>{id === "A" ? "Human-centered" : "Action-oriented"}</h2><small>GrantReady · LinkedIn-style draft</small></div><b>Not published</b></header><div className="present-paper"><p className="present-post-copy" data-essential="draft-text">{visible}</p></div><footer>{difference ? `${difference.added} words added · ${difference.removed} removed · Claim retained` : "Original generated text · Human review required"}</footer></article>;
 }
 
-function PresentationMark() {
-  return <svg viewBox="0 0 48 48" fill="none" aria-hidden="true"><path d="M24 10C9-1-1 22 13 28c8 4 14-9 22-7 15 3 8 28-7 18" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" /><path d="M24 38C9 49-1 26 13 20c8-4 14 9 22 7 15-3 8-28-7-18" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" opacity=".45" /><circle cx="24" cy="24" r="3" fill="currentColor" /></svg>;
+function Orbit({ cycle, feedback, approved }: { cycle: number; feedback: boolean; approved: boolean }) {
+  const label = approved ? "B APPROVED" : feedback ? "HUMAN DIRECTION" : cycle ? `CYCLE 0${cycle}` : "GRANTREADY";
+  return <div className={`present-loop ${feedback ? "is-receiving" : ""} ${approved ? "is-approved" : ""}`} role="img" aria-label={`Three-cycle loop: ${cycle ? `cycle ${cycle} of 3` : "campaign brief"}. ${approved ? "B approved; loop stopped." : "Improve with Feedback."}`}>
+    <svg className="present-orbit-wide" viewBox="0 0 440 430" aria-hidden="true"><defs><linearGradient id="present-orbit-grad"><stop stopColor="#dcffe8" /><stop offset="1" stopColor="#52c9a3" /></linearGradient><marker id="present-orbit-arrow" markerWidth="7" markerHeight="7" refX="5" refY="3" orient="auto"><path d="m0 0 5 3-5 3" fill="none" stroke="#c6ffe0" strokeWidth="1.5" /></marker></defs><circle cx="220" cy="215" r="151" className="present-orbit-aura" /><circle cx="220" cy="215" r="126" className="present-orbit-guide" /><path d="M140 94 Q220 47 300 94 M354 189 Q364 297 273 337 M167 337 Q75 301 86 189" className="present-orbit-track" markerEnd="url(#present-orbit-arrow)" /><path d="M140 94 Q220 47 300 94 M354 189 Q364 297 273 337 M167 337 Q75 301 86 189" className="present-orbit-motion" /><text x="220" y="184" textAnchor="middle" className="present-orbit-eyebrow">{label}</text><text x="220" y="236" textAnchor="middle" className="present-orbit-number">{approved ? "✓" : cycle ? `0${cycle} / 03` : "01 → 03"}</text><text x="220" y="266" textAnchor="middle" className="present-orbit-caption">{approved ? "The loop is complete" : "Improve with Feedback"}</text>{[{x:104,y:131,n:1,name:"GENERATE"},{x:336,y:131,n:2,name:"REVISE"},{x:220,y:354,n:3,name:"REFINE"}].map(({x,y,n,name}) => <g key={n} className={`present-orbit-node ${cycle === n ? "is-active" : n < cycle ? "is-complete" : ""}`}><circle cx={x} cy={y} r="41" /><text x={x} y={y+4} textAnchor="middle">{n < cycle ? "✓" : `0${n}`}</text><text className="present-node-name" x={x} y={y+20} textAnchor="middle">{name}</text></g>)}</svg>
+    <svg className="present-orbit-compact" viewBox="0 0 620 128" aria-hidden="true"><path d="M112 38H279M337 38H505M534 60Q534 104 480 104H142Q87 104 87 60" className="present-orbit-track" /><path d="M534 60Q534 104 480 104H142Q87 104 87 60" className="present-orbit-motion" /><text x="310" y="108" textAnchor="middle" className="present-compact-label">{approved ? "B APPROVED · LOOP STOPPED" : "↺ IMPROVE WITH FEEDBACK"}</text>{[1,2,3].map((n,i) => <g key={n} className={`present-orbit-node ${cycle === n ? "is-active" : n < cycle ? "is-complete" : ""}`}><circle cx={88+i*222} cy="38" r="26" /><text x={88+i*222} y="44" textAnchor="middle">{n < cycle ? "✓" : `0${n}`}</text><text className="present-compact-name" x={88+i*222} y="82" textAnchor="middle">{["GENERATE","REVISE","REFINE"][i]}</text></g>)}</svg>
+  </div>;
 }
-function PresenterIcon({ name }: { name: "play" | "pause" | "replay" | "next" | "exit" }) {
-  return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{name === "play" ? <path d="m8 5 11 7-11 7Z" /> : name === "pause" ? <path d="M8 5v14M16 5v14" /> : name === "replay" ? <path d="M4 9a8 8 0 1 1 0 6M4 3v6h6" /> : name === "next" ? <path d="M4 12h16m-6-6 6 6-6 6" /> : <path d="M7 17 17 7M7 7h10v10" />}</svg>;
-}
+function Mark() { return <svg viewBox="0 0 48 48" fill="none" aria-hidden="true"><path d="M24 10C9-1-1 22 13 28c8 4 14-9 22-7 15 3 8 28-7 18" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" /><path d="M24 38C9 49-1 26 13 20c8-4 14 9 22 7 15-3 8-28-7-18" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" opacity=".45" /></svg>; }
+function Icon({ name }: { name: "play" | "pause" | "replay" | "next" | "exit" }) { return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{name === "play" ? <path d="m8 5 11 7-11 7Z" /> : name === "pause" ? <path d="M8 5v14M16 5v14" /> : name === "replay" ? <path d="M4 9a8 8 0 1 1 0 6M4 3v6h6" /> : name === "next" ? <path d="M4 12h16m-6-6 6 6-6 6" /> : <path d="M7 17 17 7M7 7h10v10" />}</svg>; }

@@ -5,16 +5,16 @@ import { createDemoFrame } from "./demo";
 // Its separate timeline does not change the existing film or manual campaigns.
 export const PRESENTATION_DURATION = 180;
 export const PRESENTATION_STAGES = [
-  { at: 0, title: "A better draft starts with a conversation.", label: "Welcome to Content Studio", scene: "opening", frame: 0, note: "Michelle narrates. The Content Agent demonstrates. Human judgment leads every refinement." },
-  { at: 12, title: "Give the content a clear purpose.", label: "The campaign brief", scene: "brief", frame: 1, note: "A hypothetical GrantReady example: a defined audience, a message, and a reviewer-supplied demonstration claim." },
-  { at: 30, title: "Cycle 1. One message, two perspectives.", label: "Cycle 1 · Generate A/B", scene: "drafts", frame: 2, note: "Both posts below come from the actual TypeScript generator. Two perspectives, with the same hypothetical claim." },
-  { at: 56, title: "Human feedback enters the loop.", label: "Review · First direction", scene: "feedback-one", frame: 3, note: "Simulated reviewer: “Make it shorter.” This direction will be applied to both drafts in Cycle 2." },
-  { at: 70, title: "Cycle 2. Say more with less.", label: "Cycle 2 · First revision", scene: "cycle-two", frame: 4, note: "Mint highlights show text added or replaced from Cycle 1. Removed text is counted; the full current drafts remain visible." },
-  { at: 96, title: "A second direction. A clearer invitation.", label: "Review · Second direction", scene: "feedback-two", frame: 5, note: "Simulated reviewer: “More detailed. Ask a question.” The final revision must still preserve the supplied claim." },
-  { at: 110, title: "Cycle 3. Add context. Invite a response.", label: "Cycle 3 · Final revision", scene: "cycle-three", frame: 6, note: "Both posts are revised by the existing function. The claim stays; added detail and closing questions are highlighted." },
-  { at: 140, title: "Every refinement leaves a trace.", label: "The revision history", scene: "history", frame: 7, note: "Three actual browser-state cycles: initial generation, one concise revision, and one detailed revision. No fourth cycle." },
-  { at: 156, title: "The agent stops. A person decides.", label: "Human approval gate", scene: "approval", frame: 7, note: "Playback pauses here. Select exactly one variation, confirm review, then explicitly simulate approval. Nothing is published." },
-  { at: 174, title: "Created with intention. Guided by people.", label: "Approval ends the loop", scene: "ending", frame: 7, note: "One simulated approval. Three actual Content cycles. No automatic publishing, invented results, or Analytics integration." },
+  { at: 0, title: "GrantReady. A clearer path to better content.", label: "A hypothetical nonprofit campaign", scene: "opening", frame: 0, note: "GrantReady is a hypothetical concept. Watch one brief become two drafts, then improve through three Content cycles." },
+  { at: 10, title: "A clear audience. A grounded message.", label: "The GrantReady campaign brief", scene: "brief", frame: 1, note: "The brief defines the audience, purpose, message and reviewer-supplied hypothetical claim. No grant-finding product is implied." },
+  { at: 24, title: "Cycle 1. Two ways to start a conversation.", label: "Generate · Original A/B drafts", scene: "drafts", frame: 2, note: "Actual generated copy. A leads with people; B leads with action. Both retain the same hypothetical claim." },
+  { at: 56, title: "A human direction changes the conversation.", label: "Scripted reviewer · First feedback", scene: "feedback-one", frame: 3, note: "Scripted feedback: “Make it shorter.” The next cycle applies this direction to both posts without removing the claim." },
+  { at: 68, title: "Cycle 2. A sharper, more concise message.", label: "Revise · First feedback applied", scene: "cycle-two", frame: 4, note: "Mint highlights show added or replaced language compared with Cycle 1. These are textual changes, not measured campaign results." },
+  { at: 96, title: "More context. A reason to respond.", label: "Scripted reviewer · Second feedback", scene: "feedback-two", frame: 5, note: "Scripted feedback: “More detailed. Ask a question.” A second real revision will add context and invite a response." },
+  { at: 108, title: "Cycle 3. The final controlled refinement.", label: "Refine · Detail and a closing question", scene: "cycle-three", frame: 6, note: "Both final drafts come from the actual revision function. The hypothetical claim stays intact. Three total cycles; no fourth revision." },
+  { at: 140, title: "Three cycles. Every direction accounted for.", label: "Actual revision history", scene: "history", frame: 7, note: "Initial generation, a concise revision, and a detailed revision. This history belongs to the demonstration's browser state." },
+  { at: 150, title: "One reviewer. One selected variation.", label: "Scripted simulation of human approval", scene: "approval", frame: 7, note: "This automated reviewer is explicitly scripted: select B, confirm simulated review, then call the unchanged approval function." },
+  { at: 174, title: "Variation B approved. Nothing published.", label: "GrantReady · Demonstration complete", scene: "ending", frame: 7, note: "B alone is approved in this simulation. A remains unapproved. The loop is stopped. No content has been published." },
 ] as const;
 export function presentationStageAt(seconds: number) {
   if (!Number.isFinite(seconds) || seconds < 0) throw new Error("Invalid presentation time.");
@@ -31,11 +31,35 @@ export function approvePresentation(id: "A" | "B", reviewed: boolean, previous: 
   const loop = createPresentationFrame(8)!;
   return approvePost(loop.history.at(-1)!.posts, id, reviewed);
 }
-export function nextPresentationTime(elapsed: number, delta: number, approved: boolean) {
+export function nextPresentationTime(elapsed: number, delta: number, approved?: boolean) {
   if (!Number.isFinite(elapsed) || !Number.isFinite(delta) || elapsed < 0 || delta < 0) throw new Error("Invalid playback time.");
-  const next = Math.min(PRESENTATION_DURATION, elapsed + delta);
-  if (!approved && elapsed < 156 && next >= 156) return 156;
-  return !approved ? Math.min(next, 156) : next;
+  void approved; // Compatibility with earlier callers; simulated review never blocks playback.
+  return Math.min(PRESENTATION_DURATION, Math.round((elapsed + delta) * 1000) / 1000);
+}
+
+// Explicit presentation-only script. Real manual approval still requires its human flag.
+export function scriptedReviewAt(seconds: number) {
+  presentationStageAt(seconds); // Validate before constructing any simulated decision.
+  const selected = seconds >= 155;
+  const reviewed = seconds >= 161;
+  const approval = seconds >= 167 ? approvePresentation("B", reviewed, null) : null;
+  return { selectedId: selected ? "B" as const : null, reviewed, approval,
+    phase: approval ? "approved" : reviewed ? "confirm" : selected ? "select" : "review" };
+}
+
+// Small viewports automatically show every paragraph, not a shortened replacement.
+// Each A/B draft has two reading panels; joining them reconstructs the exact post.
+export function draftPages(content: string) {
+  const paragraphs = content.split("\n\n");
+  const pivot = Math.ceil(paragraphs.length / 2);
+  return [paragraphs.slice(0, pivot).join("\n\n"), paragraphs.slice(pivot).join("\n\n")];
+}
+export function draftSpotlightAt(seconds: number, stageIndex: number) {
+  if (![2, 4, 6].includes(stageIndex)) throw new Error("Not a draft stage.");
+  presentationStageAt(seconds);
+  const start = PRESENTATION_STAGES[stageIndex].at, end = PRESENTATION_STAGES[stageIndex + 1].at;
+  const quarter = Math.max(0, Math.min(3, Math.floor((seconds - start) / ((end - start) / 4))));
+  return { id: quarter < 2 ? "A" as const : "B" as const, page: quarter % 2 };
 }
 
 // Word-level LCS preserves the exact current draft, including whitespace.
