@@ -2,6 +2,8 @@
 "use client";
 
 import { useState } from "react";
+import StudioDemo from "./StudioDemo";
+import StudioPresentation from "./StudioPresentation";
 import "./content-studio.css";
 import {
   startRevisionLoop,
@@ -22,6 +24,7 @@ const initialBrief: CampaignBrief = {
 
 export default function GrowthLoopDashboard() {
   const [brief, setBrief] = useState(initialBrief);
+  const [showDemo, setShowDemo] = useState<"presentation" | "film" | null>(null);
   const [loop, setLoop] = useState<RevisionLoop | null>(null);
   const [feedback, setFeedback] = useState("");
   const [approvedPost, setApprovedPost] = useState<string | null>(null);
@@ -73,7 +76,7 @@ export default function GrowthLoopDashboard() {
   ] as const;
 
   return (
-    <main className="studio">
+    <><main className="studio" inert={showDemo ? true : undefined}>
       <div className="studio-shell">
         <header className="studio-header">
           <div className="studio-brand"><LoopMark /><span>GrowthLoop <b>AI</b></span></div>
@@ -83,7 +86,7 @@ export default function GrowthLoopDashboard() {
         <section className="studio-intro">
           <div><p className="studio-eyebrow">CREATE WITH INTENTION. REFINE TOGETHER.</p>
             <h1><span className="studio-sr-only">GrowthLoop AI | </span>Content <em>Studio</em><span className="studio-title-dot">.</span></h1>
-            <p className="studio-subtitle">Human-guided content creation, revision, and approval.</p>
+            <p className="studio-subtitle">Human-guided content creation, revision, and approval.</p><div className="studio-demo-launch"><button className="studio-button studio-button-primary" onClick={() => setShowDemo("presentation")}><span aria-hidden="true">▶</span> Watch Demo <span className="studio-demo-duration">3-minute presentation</span></button><span>Three cycles · Presenter controls · Explicit simulated approval</span><button className="studio-film-link" onClick={() => setShowDemo("film")}>Watch 78-second film</button></div>
           </div>
           <div className="studio-intro-note"><LoopMark /><p>Good content is a conversation.<br /><strong>You keep it moving.</strong></p></div>
         </section>
@@ -125,7 +128,7 @@ export default function GrowthLoopDashboard() {
         {loop ? <>
           <section className="studio-drafts" aria-labelledby="drafts-title">
             <div className="studio-section-head"><div><p className="studio-eyebrow">02 / EXPLORE THE POSSIBILITIES</p><h2 id="drafts-title">One message. Two perspectives.</h2><p className="studio-section-description">LinkedIn-style previews · Drafts only, never automatically published.</p></div><span className="studio-cycle">Cycle {loop.currentCycle} of 3</span></div>
-            <div className="studio-preview-grid">{currentPosts.map((post) => <article key={post.id} className={`studio-preview ${post.id === "A" ? "studio-preview-a" : "studio-preview-b"} ${approvedPost === post.id ? "is-approved" : ""}`}>
+            <div className="studio-preview-grid">{currentPosts.map((post) => <article key={`${loop.currentCycle}-${post.id}`} className={`studio-preview ${post.id === "A" ? "studio-preview-a" : "studio-preview-b"} ${approvedPost === post.id ? "is-approved" : ""}`}>
               <div className="studio-preview-label"><span className="studio-variation-letter">{post.id}</span><div><p>VARIATION {post.id}</p><h3>{post.id === "A" ? "Human-Centered" : "Action-Oriented"}</h3></div><StudioIcon name={post.id === "A" ? "people" : "spark"} /></div>
               <div className="studio-post">
                 <div className="studio-post-author"><span className="studio-avatar"><LoopMark /></span><div><strong>GrowthLoop AI</strong><span>Campaign content · Draft preview</span><span>Not published <span aria-hidden="true">· ◉</span></span></div><span className="studio-linkedin-mark" aria-hidden="true">in</span></div>
@@ -143,7 +146,7 @@ export default function GrowthLoopDashboard() {
         {error && <p role="alert" className="studio-error"><StudioIcon name="review" />{error}</p>}
         <footer className="studio-footer"><span><LoopMark />GrowthLoop AI <span aria-hidden="true">/</span> Content Studio</span><p>Created with AI. Guided by people.</p></footer>
       </div>
-    </main>
+    </main>{showDemo === "film" && <StudioDemo onClose={() => setShowDemo(null)} />}{showDemo === "presentation" && <StudioPresentation onClose={() => setShowDemo(null)} />}</>
   );
 }
 

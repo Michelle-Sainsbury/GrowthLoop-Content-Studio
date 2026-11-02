@@ -7,9 +7,11 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test:compile": "tsc --target es2022 --module commonjs --moduleResolution node --skipLibCheck --esModuleInterop --outDir .content-agent-test-build lib/content-agent/validate-brief.ts lib/content-agent/generate-posts.ts lib/content-agent/revision-loop.ts lib/content-agent/approve-posts.ts",
-    "test": "npm run test:compile && node --test tests/content-agent.test.cjs",
-    "typecheck": "next typegen && tsc --noEmit"
+    "test:compile": "tsc --target es2022 --module commonjs --moduleResolution node --skipLibCheck --esModuleInterop --outDir .content-agent-test-build lib/content-agent/validate-brief.ts lib/content-agent/generate-posts.ts lib/content-agent/revision-loop.ts lib/content-agent/approve-posts.ts lib/content-agent/demo.ts lib/content-agent/presentation.ts",
+    "test": "npm run test:compile && node --test tests/content-agent.test.cjs tests/content-demo.test.cjs tests/content-presentation.test.cjs",
+    "typecheck": "next typegen && tsc --noEmit",
+    "test:browser": "node --test tests/content-studio.browser.cjs tests/content-presentation.browser.cjs",
+    "demo:record": "node scripts/capture-demo.mjs"
   },
   "dependencies": {
     "next": "16.4.2",
@@ -23,6 +25,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.4.2",
+    "playwright": "1.62.1",
     "tailwindcss": "^4",
     "typescript": "^5"
   },
